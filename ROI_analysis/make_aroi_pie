@@ -1,0 +1,125 @@
+import os
+import pathlib
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import itertools
+import matplotlib.patches as mpatches
+
+cwd = pathlib.Path().resolve()
+
+# for each anatomical ROI in combo atlas, get its schaefer parcels
+#for each parcel, get its trw and vxl size
+
+parcs_file = os.path.join(cwd, 'subjs_data/Group_data/intactq001_in_schaefer200_res/valid_lbls/final_parcs_table.xls')
+df_rois = pd.read_excel(parcs_file)
+p_lbls = df_rois['final_names']
+ns = p_lbls.str.split("_", n=1)
+names = [None]*len(ns)
+for n in range(len(ns)): names[n] = ns.iloc[n][1]
+u_names = []
+for n in names: 
+    if n not in u_names:
+        u_names.append(n)
+
+rois_data = pd.DataFrame([],columns= ['anat_name', 'parcels', 'trws', 'p_sizes'], index=range(len(u_names))) # combo rois
+aon_f = os.path.join(cwd, 'subjs_data/Group_data/intactq001_in_schaefer200_res/valid_lbls/aon_names_in_combo.xls')
+f_data = pd.read_excel(aon_f)
+l = list(f_data.iloc[0:,0])
+aons = [item for item in l if str(item) !='nan']
+
+hems = ['Right' , 'Left']
+rs = 4
+cs = 7
+fig, axes = plt.subplots(rs,cs)
+cnt = 0
+trw_types = np.array([1, 2, 3, 4])
+cat = ('INT', 'HG', 'SG', 'PRIM')
+# Creating color parameters
+real_colors = ( "red", "yellow", "green", "blue")
+for hem in hems:
+    for aroi in aons:
+        # get aon roi in all n
+        name = aroi + '_' + hem
+        n_locs = [i for i, x in enumerate(names) if x == name]
+        p_lbl = df_rois['final_lbls'][n_locs]
+        trws = df_rois['final_types'][n_locs]
+        sizes = df_rois['parcs_size'][n_locs]
+
+        #get valid trws (1-4) sizes and types
+        good_trw = trws < 5
+        if any(good_trw):
+            pie_trw = np.array(trws)
+            pie_trw = pie_trw[good_trw]
+            s = np.array(sizes)
+            p_sizes = s[good_trw]
+            total_vxls = np.sum(p_sizes)
+            trw_prcnt = np.round(p_sizes/total_vxls*100)
+
+            pie_torder = []
+            pie_sizes = []
+            #pie_prcnt = []
+            pie_cat = []
+            pie_col = []
+            for t in trw_types:
+                tup_inds = np.where(pie_trw == t)
+                inds = tup_inds[0]
+                if len(inds): # if this roi has this trw type
+                    pie_torder.append(pie_trw[inds])
+                    #pie_prcnt.append(trw_prcnt[inds])
+                    pie_sizes.append(p_sizes[inds])
+                    pie_cat.append([cat[t-1]]*len(inds))
+                    pie_col.append([real_colors[t-1]]*len(inds))
+
+            # create pie chart 
+            #only for rois with normal trw (i.e.  not 5) and in aon list
+          
+            data = np.concatenate( pie_sizes, axis=0 )
+            cats = list(itertools.chain.from_iterable(pie_cat))
+            cols = list(itertools.chain.from_iterable(pie_col))
+
+            # explode data
+            explode = [0.0]*len(data)
+            # Wedge properties
+            wp = { 'linewidth' : 2, 'edgecolor' : "white" }
+            # Creating autocpt arguments
+            def func(pct, allvalues):
+                absolute = int(pct / 100.*np.sum(allvalues))
+                return "{:.1f}%\n({:d} v)".format(pct, absolute)
+            
+            # Creating plot
+            axind = np.unravel_index(cnt, [rs,cs])
+            wedges, texts, autotexts = axes[axind[0], axind[1]].pie(data, 
+                autopct = lambda pct: func(pct, data), 
+                explode = explode, 
+                # labels = cats, 
+                shadow = False, 
+                colors = cols, 
+                startangle = 90, 
+                wedgeprops = wp, 
+                textprops = dict(color ="black"))
+            
+            
+            axes[axind[0], axind[1]].set_title(name)
+            cnt+=1
+      
+#Adding legend
+'''axes[0,0].legend(wedges, cat,
+    title = "TRWs",
+    loc ='best',
+    bbox_to_anchor =(1, 0, 0.5, 1))'''
+r_patch = mpatches.Patch(color = real_colors[0], label = cat[0])
+y_patch = mpatches.Patch(color = real_colors[1], label = cat[1])
+g_patch = mpatches.Patch(color = real_colors[2], label = cat[2])
+b_patch = mpatches.Patch(color = real_colors[3], label = cat[3])
+
+fig.legend(handles=[r_patch, y_patch, g_patch, b_patch], loc = 'center right')
+fig.suptitle('TRWs in ROIs', fontsize=16)
+plt.setp(autotexts, size = 10, weight ="bold")     
+# show plot
+plt.show()            
+            
+
+
+
+
